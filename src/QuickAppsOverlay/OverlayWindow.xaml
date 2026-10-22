@@ -1,0 +1,150 @@
+<Window x:Class="QuickAppsOverlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="屏幕快捷切换栏"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        MinWidth="36" MinHeight="36"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Window.Resources>
+        <!-- Button style for tracked window entries -->
+        <Style x:Key="WindowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#44FFFFFF"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="MaxWidth" Value="180"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#66FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#88FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Grip button style (collapse/expand toggle) -->
+        <Style x:Key="GripButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#CCFFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#44FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Context menu -->
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="添加应用快捷方式…" Click="AddApp_Click"/>
+            <MenuItem Header="刷新本机窗口列表" Click="RefreshWindows_Click"/>
+            <Separator/>
+            <MenuItem Header="停靠位置">
+                <MenuItem Header="底部" Click="DockBottom_Click"/>
+                <MenuItem Header="左侧" Click="DockLeft_Click"/>
+                <MenuItem Header="顶部" Click="DockTop_Click"/>
+                <MenuItem Header="右侧" Click="DockRight_Click"/>
+                <MenuItem Header="自由悬浮" Click="Float_Click"/>
+            </MenuItem>
+            <MenuItem Header="透明度">
+                <Slider x:Name="OpacitySlider" Minimum="0.15" Maximum="1.0" Value="0.85"
+                        Width="150" ValueChanged="OpacitySlider_ValueChanged"
+                        TickFrequency="0.05" IsSnapToTickEnabled="True"/>
+            </MenuItem>
+            <Separator/>
+            <MenuItem x:Name="LockPositionMenuItem" Header="锁定位置" IsCheckable="True"
+                      Click="LockPosition_Click"/>
+            <Separator/>
+            <MenuItem Header="导出应用同步诊断" Click="ExportDiagnostics_Click"/>
+            <MenuItem Header="隐藏悬浮栏" Click="HideToTray_Click"/>
+            <MenuItem Header="完全退出" Click="Exit_Click"/>
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <!-- Main container -->
+    <Border x:Name="MainBorder"
+            Background="#CC1E1E2E"
+            CornerRadius="8"
+            Padding="3"
+            BorderBrush="#44FFFFFF"
+            BorderThickness="1">
+        <StackPanel x:Name="RootPanel" Orientation="Horizontal">
+            <Button x:Name="HomeButton" Style="{StaticResource GripButtonStyle}" Content="⌂"
+                    ToolTip="显示本机桌面" Click="HomeButton_Click"/>
+            <Button x:Name="OrientationButton" Style="{StaticResource GripButtonStyle}" Content="↕"
+                    ToolTip="切换为横向排列" Click="OrientationButton_Click"/>
+            <TextBlock x:Name="AttentionSyncStatusText" Text="?" Foreground="#FFFFC857"
+                       FontSize="10" VerticalAlignment="Center" Margin="0,0,3,0"
+                       ToolTip="通知镜像：Shell Hook 状态尚未验证"/>
+            <!-- Grip / collapse-expand button -->
+            <Button x:Name="GripButton"
+                    Style="{StaticResource GripButtonStyle}"
+                    Content="☰"
+                    ToolTip="点击展开或收起；右键打开设置"
+                    Click="GripButton_Click"/>
+
+            <ScrollViewer x:Name="WindowScrollViewer"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="AppButtonsPanel" Orientation="Horizontal">
+                    <!-- User-pinned app launchers -->
+                    <StackPanel x:Name="LauncherButtonsPanel" Orientation="Horizontal" Visibility="Visible"/>
+
+                    <Border x:Name="Divider" Width="1" Height="20" Background="#55FFFFFF"
+                            Margin="3,4" VerticalAlignment="Center" Visibility="Collapsed"/>
+
+                    <!-- Auto-mapped windows from this management PC -->
+                    <StackPanel x:Name="WindowButtonsPanel" Orientation="Horizontal" Visibility="Visible"/>
+
+                    <TextBlock x:Name="PlaceholderText"
+                               Text="自动显示本机已打开窗口"
+                               Foreground="#88FFFFFF"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Margin="6,0"
+                               Visibility="Visible"/>
+                </StackPanel>
+            </ScrollViewer>
+        </StackPanel>
+    </Border>
+</Window>
